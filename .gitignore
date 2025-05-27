@@ -111,4 +111,8 @@ public/uploads/
 # SSL certificates
 *.pem
 *.key
-*.crt 
+*.crt
+
+# Logs directory
+logs/
+*.log 
