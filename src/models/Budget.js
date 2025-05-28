@@ -153,15 +153,21 @@ budgetSchema.methods.getFormattedRemaining = function(currency = 'EUR') {
 // Metodo per aggiornare le statistiche
 budgetSchema.methods.updateStats = async function() {
   const Expense = require('./Expense');
+  const mongoose = require('mongoose');
   
   const startDate = new Date(this.year, this.month - 1, 1);
   const endDate = new Date(this.year, this.month, 0, 23, 59, 59);
+  
+  // Assicuriamoci che categoryId sia un ObjectId
+  const categoryObjectId = mongoose.Types.ObjectId.isValid(this.categoryId) 
+    ? new mongoose.Types.ObjectId(this.categoryId) 
+    : this.categoryId;
   
   const stats = await Expense.aggregate([
     {
       $match: {
         familyId: this.familyId,
-        category: this.categoryId,
+        category: categoryObjectId,
         date: { $gte: startDate, $lte: endDate },
         isActive: true
       }

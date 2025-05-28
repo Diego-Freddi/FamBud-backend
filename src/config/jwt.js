@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 // Genera un token JWT
 const generateToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '7d',
     issuer: 'FamBud-API',
     audience: 'FamBud-Client'
   });

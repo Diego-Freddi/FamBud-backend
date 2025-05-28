@@ -9,6 +9,11 @@ const authenticate = async (req, res, next) => {
     const token = extractTokenFromHeader(req.headers.authorization);
     
     if (!token) {
+      logger.warn('Authentication failed: No token provided', {
+        url: req.originalUrl,
+        method: req.method,
+        ip: req.ip
+      });
       return res.status(401).json({
         error: 'Accesso negato',
         message: 'Token di autenticazione richiesto'
@@ -22,6 +27,12 @@ const authenticate = async (req, res, next) => {
     const user = await User.findById(decoded.userId).select('-password');
     
     if (!user || !user.isActive) {
+      logger.warn('Authentication failed: User not found or inactive', {
+        userId: decoded.userId,
+        url: req.originalUrl,
+        method: req.method,
+        ip: req.ip
+      });
       return res.status(401).json({
         error: 'Accesso negato',
         message: 'Utente non trovato o non attivo'
@@ -32,11 +43,17 @@ const authenticate = async (req, res, next) => {
     req.user = user;
     req.token = token;
     
-    logger.debug(`User authenticated: ${user.email}`);
+    logger.debug(`User authenticated: ${user.email} for ${req.method} ${req.originalUrl}`);
     next();
 
   } catch (error) {
-    logger.error('Authentication error:', error.message);
+    logger.error('Authentication error:', {
+      error: error.message,
+      url: req.originalUrl,
+      method: req.method,
+      ip: req.ip,
+      stack: error.stack
+    });
     
     return res.status(401).json({
       error: 'Accesso negato',

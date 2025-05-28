@@ -364,9 +364,30 @@ const getIncomeStats = async (req, res) => {
     // Statistiche annuali
     const yearlyStats = await Income.getYearlyStats(familyId, currentYear);
 
+    // Calcola totali per il frontend
+    const totalAmount = monthlyStats.reduce((sum, stat) => sum + stat.totalAmount, 0);
+    const totalCount = monthlyStats.reduce((sum, stat) => sum + stat.count, 0);
+    const avgAmount = totalCount > 0 ? totalAmount / totalCount : 0;
+
+    // Formatta dati per fonte per il frontend
+    const bySource = monthlyStats.map(stat => ({
+      _id: stat._id,
+      source: stat._id, // La fonte è l'_id nel gruppo
+      totalAmount: stat.totalAmount,
+      count: stat.count,
+      percentage: totalAmount > 0 ? (stat.totalAmount / totalAmount) * 100 : 0
+    }));
+
     res.json({
       success: true,
       data: {
+        // Struttura compatibile con il frontend
+        totalAmount,
+        avgAmount,
+        count: totalCount,
+        bySource,
+        
+        // Dati dettagliati
         monthly: monthlyStats,
         yearly: yearlyStats,
         period: {

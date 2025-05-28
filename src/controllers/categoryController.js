@@ -152,17 +152,20 @@ const updateCategory = async (req, res) => {
     const { id } = req.params;
     const { familyId } = req.user;
 
-    // Trova la categoria
+    // Trova la categoria (incluse quelle default)
     const category = await Category.findOne({
       _id: id,
-      familyId: familyId, // Solo categorie della famiglia, non quelle predefinite
+      $or: [
+        { isDefault: true },
+        { familyId: familyId }
+      ],
       isActive: true
     });
 
     if (!category) {
       return res.status(404).json({
         error: 'Categoria non trovata',
-        message: 'La categoria richiesta non esiste o non può essere modificata'
+        message: 'La categoria richiesta non esiste'
       });
     }
 
@@ -176,32 +179,48 @@ const updateCategory = async (req, res) => {
 
     const { name, description, color, icon, order } = req.body;
 
-    // Se il nome è cambiato, verifica che non esista già
-    if (name && name.trim() !== category.name) {
-      const existingCategory = await Category.findOne({
-        name: name.trim(),
-        $or: [
-          { isDefault: true },
-          { familyId: familyId }
-        ],
-        isActive: true,
-        _id: { $ne: id }
-      });
-
-      if (existingCategory) {
+    // Per categorie default, permetti solo modifica colore e icona
+    if (category.isDefault) {
+      if (name !== undefined || description !== undefined || order !== undefined) {
         return res.status(400).json({
-          error: 'Categoria già esistente',
-          message: 'Una categoria con questo nome esiste già'
+          error: 'Modifica non consentita',
+          message: 'Per le categorie predefinite è possibile modificare solo colore e icona'
         });
       }
-    }
+      
+      // Aggiorna solo colore e icona per categorie default
+      if (color !== undefined) category.color = color;
+      if (icon !== undefined) category.icon = icon;
+    } else {
+      // Per categorie personalizzate, permetti tutte le modifiche
+      
+      // Se il nome è cambiato, verifica che non esista già
+      if (name && name.trim() !== category.name) {
+        const existingCategory = await Category.findOne({
+          name: name.trim(),
+          $or: [
+            { isDefault: true },
+            { familyId: familyId }
+          ],
+          isActive: true,
+          _id: { $ne: id }
+        });
 
-    // Aggiorna campi
-    if (name !== undefined) category.name = name.trim();
-    if (description !== undefined) category.description = description.trim();
-    if (color !== undefined) category.color = color;
-    if (icon !== undefined) category.icon = icon;
-    if (order !== undefined) category.order = order;
+        if (existingCategory) {
+          return res.status(400).json({
+            error: 'Categoria già esistente',
+            message: 'Una categoria con questo nome esiste già'
+          });
+        }
+      }
+
+      // Aggiorna tutti i campi per categorie personalizzate
+      if (name !== undefined) category.name = name.trim();
+      if (description !== undefined) category.description = description.trim();
+      if (color !== undefined) category.color = color;
+      if (icon !== undefined) category.icon = icon;
+      if (order !== undefined) category.order = order;
+    }
 
     await category.save();
 

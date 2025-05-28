@@ -11,6 +11,7 @@ const incomeRoutes = require('./routes/incomes');
 const categoryRoutes = require('./routes/categories');
 const budgetRoutes = require('./routes/budgets');
 const familyRoutes = require('./routes/family');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Importazione middleware personalizzati
 // const errorHandler = require('./middleware/errorHandler');
@@ -73,6 +74,7 @@ app.use('/api/incomes', incomeRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/family', familyRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

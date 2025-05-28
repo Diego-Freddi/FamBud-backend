@@ -1,5 +1,6 @@
 const Expense = require('../models/Expense');
 const Category = require('../models/Category');
+const Budget = require('../models/Budget');
 const logger = require('../utils/logger');
 const { validationResult } = require('express-validator');
 
@@ -194,6 +195,26 @@ const createExpense = async (req, res) => {
     await expense.populate('category', 'name color icon');
     await expense.populate('userId', 'name email avatar');
 
+    // Aggiorna automaticamente le statistiche dei budget per questa categoria
+    try {
+      const expenseDate = new Date(expense.date);
+      const budgets = await Budget.find({
+        familyId,
+        categoryId: category,
+        month: expenseDate.getMonth() + 1,
+        year: expenseDate.getFullYear(),
+        isActive: true
+      });
+
+      // Aggiorna le statistiche per ogni budget trovato
+      for (const budget of budgets) {
+        await budget.updateStats();
+      }
+    } catch (budgetError) {
+      // Log l'errore ma non bloccare la risposta
+      logger.warn('Budget stats update failed after expense creation:', budgetError);
+    }
+
     logger.info(`New expense created: ${amount}€ by ${req.user.email}`);
 
     res.status(201).json({
@@ -261,6 +282,11 @@ const updateExpense = async (req, res) => {
       receipt
     } = req.body;
 
+    // Salva i valori originali per aggiornare i budget
+    const originalCategory = expense.category.toString();
+    const originalDate = new Date(expense.date);
+    const originalAmount = expense.amount;
+
     // Se la categoria è cambiata, verificala
     if (category && category !== expense.category.toString()) {
       const categoryDoc = await Category.findOne({
@@ -295,6 +321,45 @@ const updateExpense = async (req, res) => {
     // Popola i dati per la risposta
     await expense.populate('category', 'name color icon');
     await expense.populate('userId', 'name email avatar');
+
+    // Aggiorna automaticamente le statistiche dei budget
+    try {
+      const newDate = new Date(expense.date);
+      const categoriesToUpdate = new Set();
+      const periodsToUpdate = new Set();
+
+      // Aggiungi categoria e periodo originali
+      categoriesToUpdate.add(originalCategory);
+      periodsToUpdate.add(`${originalDate.getFullYear()}-${originalDate.getMonth() + 1}`);
+
+      // Aggiungi nuova categoria e periodo se diversi
+      if (category && category !== originalCategory) {
+        categoriesToUpdate.add(category);
+      }
+      if (date && newDate.getTime() !== originalDate.getTime()) {
+        periodsToUpdate.add(`${newDate.getFullYear()}-${newDate.getMonth() + 1}`);
+      }
+
+      // Aggiorna tutti i budget interessati
+      for (const categoryId of categoriesToUpdate) {
+        for (const period of periodsToUpdate) {
+          const [year, month] = period.split('-').map(Number);
+          const budgets = await Budget.find({
+            familyId,
+            categoryId,
+            month,
+            year,
+            isActive: true
+          });
+
+          for (const budget of budgets) {
+            await budget.updateStats();
+          }
+        }
+      }
+    } catch (budgetError) {
+      logger.warn('Budget stats update failed after expense update:', budgetError);
+    }
 
     logger.info(`Expense updated: ${id} by ${req.user.email}`);
 
@@ -352,9 +417,30 @@ const deleteExpense = async (req, res) => {
       });
     }
 
+    // Salva i dati per aggiornare i budget
+    const expenseCategory = expense.category.toString();
+    const expenseDate = new Date(expense.date);
+
     // Soft delete
     expense.isActive = false;
     await expense.save();
+
+    // Aggiorna automaticamente le statistiche dei budget
+    try {
+      const budgets = await Budget.find({
+        familyId,
+        categoryId: expenseCategory,
+        month: expenseDate.getMonth() + 1,
+        year: expenseDate.getFullYear(),
+        isActive: true
+      });
+
+      for (const budget of budgets) {
+        await budget.updateStats();
+      }
+    } catch (budgetError) {
+      logger.warn('Budget stats update failed after expense deletion:', budgetError);
+    }
 
     logger.info(`Expense deleted: ${id} by ${req.user.email}`);
 
@@ -389,9 +475,32 @@ const getExpenseStats = async (req, res) => {
     // Statistiche annuali
     const yearlyStats = await Expense.getYearlyStats(familyId, currentYear);
 
+    // Calcola totali per il frontend
+    const totalAmount = monthlyStats.reduce((sum, stat) => sum + stat.totalAmount, 0);
+    const totalCount = monthlyStats.reduce((sum, stat) => sum + stat.count, 0);
+    const avgAmount = totalCount > 0 ? totalAmount / totalCount : 0;
+
+    // Formatta dati per categoria per il frontend
+    const byCategory = monthlyStats.map(stat => ({
+      _id: stat._id,
+      name: stat.categoryInfo.name,
+      color: stat.categoryInfo.color,
+      icon: stat.categoryInfo.icon,
+      totalAmount: stat.totalAmount,
+      count: stat.count,
+      percentage: totalAmount > 0 ? (stat.totalAmount / totalAmount) * 100 : 0
+    }));
+
     res.json({
       success: true,
       data: {
+        // Struttura compatibile con il frontend
+        totalAmount,
+        avgAmount,
+        count: totalCount,
+        byCategory,
+        
+        // Dati dettagliati
         monthly: monthlyStats,
         yearly: yearlyStats,
         period: {
