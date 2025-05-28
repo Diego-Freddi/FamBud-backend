@@ -1,6 +1,7 @@
 const Income = require('../models/Income');
 const logger = require('../utils/logger');
 const { validationResult } = require('express-validator');
+const mongoose = require('mongoose');
 
 // @desc    Ottieni tutte le entrate della famiglia
 // @route   GET /api/incomes
@@ -28,7 +29,10 @@ const getIncomes = async (req, res) => {
     };
 
     if (source) filters.source = source;
-    if (userId) filters.userId = userId;
+    if (userId) {
+      // Converti userId da stringa a ObjectId
+      filters.userId = new mongoose.Types.ObjectId(userId);
+    }
     if (isRecurring !== undefined) filters.isRecurring = isRecurring === 'true';
     
     if (startDate || endDate) {

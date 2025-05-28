@@ -3,6 +3,7 @@ const Category = require('../models/Category');
 const Budget = require('../models/Budget');
 const logger = require('../utils/logger');
 const { validationResult } = require('express-validator');
+const mongoose = require('mongoose');
 
 // @desc    Ottieni tutte le spese della famiglia
 // @route   GET /api/expenses
@@ -29,7 +30,10 @@ const getExpenses = async (req, res) => {
     };
 
     if (category) filters.category = category;
-    if (userId) filters.userId = userId;
+    if (userId) {
+      // Converti userId da stringa a ObjectId
+      filters.userId = new mongoose.Types.ObjectId(userId);
+    }
     
     if (startDate || endDate) {
       filters.date = {};

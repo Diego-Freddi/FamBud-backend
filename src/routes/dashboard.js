@@ -5,6 +5,7 @@ const Expense = require('../models/Expense');
 const Income = require('../models/Income');
 const Budget = require('../models/Budget');
 const Category = require('../models/Category');
+const mongoose = require('mongoose');
 
 // @route   GET /api/dashboard
 // @desc    Get all dashboard data in a single call
@@ -18,11 +19,12 @@ router.get('/', authenticate, async (req, res) => {
 
     // Query parallele per massima efficienza
     const [monthlyExpenses, monthlyIncomes, expensesByCategory, recentExpenses, recentIncomes, budgets] = await Promise.all([
-      // Spese mensili correnti
+      // Spese del mese corrente
       Expense.aggregate([
         {
           $match: {
-            familyId,
+            familyId: new mongoose.Types.ObjectId(familyId),
+            isActive: true,
             $expr: {
               $and: [
                 { $eq: [{ $month: '$date' }, currentMonth] },
@@ -34,17 +36,17 @@ router.get('/', authenticate, async (req, res) => {
         {
           $group: {
             _id: null,
-            totalAmount: { $sum: '$amount' },
-            count: { $sum: 1 }
+            totalAmount: { $sum: '$amount' }
           }
         }
       ]),
 
-      // Entrate mensili correnti
+      // Entrate del mese corrente
       Income.aggregate([
         {
           $match: {
-            familyId,
+            familyId: new mongoose.Types.ObjectId(familyId),
+            isActive: true,
             $expr: {
               $and: [
                 { $eq: [{ $month: '$date' }, currentMonth] },
@@ -56,17 +58,17 @@ router.get('/', authenticate, async (req, res) => {
         {
           $group: {
             _id: null,
-            totalAmount: { $sum: '$amount' },
-            count: { $sum: 1 }
+            totalAmount: { $sum: '$amount' }
           }
         }
       ]),
 
-      // Spese per categoria (mese corrente)
+      // Spese per categoria del mese corrente
       Expense.aggregate([
         {
           $match: {
-            familyId,
+            familyId: new mongoose.Types.ObjectId(familyId),
+            isActive: true,
             $expr: {
               $and: [
                 { $eq: [{ $month: '$date' }, currentMonth] },
@@ -91,8 +93,7 @@ router.get('/', authenticate, async (req, res) => {
             _id: '$category',
             categoryName: { $first: '$categoryInfo.name' },
             categoryColor: { $first: '$categoryInfo.color' },
-            totalAmount: { $sum: '$amount' },
-            count: { $sum: 1 }
+            totalAmount: { $sum: '$amount' }
           }
         },
         {
@@ -101,7 +102,10 @@ router.get('/', authenticate, async (req, res) => {
       ]),
 
       // Ultime 5 spese
-      Expense.find({ familyId })
+      Expense.find({ 
+        familyId: new mongoose.Types.ObjectId(familyId),
+        isActive: true
+      })
         .populate('category', 'name color icon')
         .populate('userId', 'name')
         .sort({ date: -1 })
@@ -109,7 +113,10 @@ router.get('/', authenticate, async (req, res) => {
         .lean(),
 
       // Ultime 5 entrate
-      Income.find({ familyId })
+      Income.find({ 
+        familyId: new mongoose.Types.ObjectId(familyId),
+        isActive: true
+      })
         .populate('userId', 'name')
         .sort({ date: -1 })
         .limit(5)
@@ -117,9 +124,10 @@ router.get('/', authenticate, async (req, res) => {
 
       // Budget del mese corrente
       Budget.find({
-        familyId,
+        familyId: new mongoose.Types.ObjectId(familyId),
         month: currentMonth,
-        year: currentYear
+        year: currentYear,
+        isActive: true
       })
         .populate('categoryId', 'name color icon')
         .lean()
@@ -145,7 +153,8 @@ router.get('/', authenticate, async (req, res) => {
       const monthExpenses = await Expense.aggregate([
         {
           $match: {
-            familyId,
+            familyId: new mongoose.Types.ObjectId(familyId),
+            isActive: true,
             $expr: {
               $and: [
                 { $eq: [{ $month: '$date' }, month] },
@@ -166,7 +175,8 @@ router.get('/', authenticate, async (req, res) => {
       const monthIncomes = await Income.aggregate([
         {
           $match: {
-            familyId,
+            familyId: new mongoose.Types.ObjectId(familyId),
+            isActive: true,
             $expr: {
               $and: [
                 { $eq: [{ $month: '$date' }, month] },
