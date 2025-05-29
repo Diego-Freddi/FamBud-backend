@@ -15,9 +15,6 @@ const { authenticate, requireFamilyMember, requireFamilyAdmin } = require('../mi
 
 const router = express.Router();
 
-// Middleware: tutte le routes richiedono autenticazione
-router.use(authenticate);
-
 // Validazioni per aggiornamento famiglia
 const updateFamilyValidation = [
   body('name')
@@ -66,46 +63,46 @@ const updateMemberRoleValidation = [
 // @route   GET /api/family
 // @desc    Ottieni informazioni famiglia corrente
 // @access  Private
-router.get('/', requireFamilyMember, getFamily);
+router.get('/', authenticate, requireFamilyMember, getFamily);
 
 // @route   PUT /api/family
-// @desc    Aggiorna informazioni famiglia
+// @desc    Aggiorna famiglia
 // @access  Private (Admin only)
-router.put('/', requireFamilyAdmin, updateFamilyValidation, updateFamily);
+router.put('/', authenticate, requireFamilyAdmin, updateFamilyValidation, updateFamily);
 
 // @route   GET /api/family/invitations
 // @desc    Ottieni inviti pendenti
 // @access  Private (Admin only)
-router.get('/invitations', requireFamilyAdmin, getInvitations);
+router.get('/invitations', authenticate, requireFamilyAdmin, getInvitations);
 
 // @route   POST /api/family/invite
 // @desc    Invita nuovo membro alla famiglia
 // @access  Private (Admin only)
-router.post('/invite', requireFamilyAdmin, inviteMemberValidation, inviteMember);
+router.post('/invite', authenticate, requireFamilyAdmin, inviteMemberValidation, inviteMember);
 
 // @route   POST /api/family/join/:token
 // @desc    Accetta invito famiglia
 // @access  Private
-router.post('/join/:token', joinFamily);
+router.post('/join/:token', authenticate, joinFamily);
 
 // @route   POST /api/family/leave
 // @desc    Lascia famiglia
 // @access  Private
-router.post('/leave', requireFamilyMember, leaveFamily);
+router.post('/leave', authenticate, requireFamilyMember, leaveFamily);
 
 // @route   PUT /api/family/members/:userId
-// @desc    Aggiorna ruolo membro famiglia
+// @desc    Aggiorna ruolo membro
 // @access  Private (Admin only)
-router.put('/members/:userId', requireFamilyAdmin, updateMemberRoleValidation, updateMemberRole);
+router.put('/members/:userId', authenticate, requireFamilyAdmin, updateMemberRoleValidation, updateMemberRole);
 
 // @route   DELETE /api/family/members/:userId
 // @desc    Rimuovi membro dalla famiglia
 // @access  Private (Admin only)
-router.delete('/members/:userId', requireFamilyAdmin, removeMember);
+router.delete('/members/:userId', authenticate, requireFamilyAdmin, removeMember);
 
 // @route   DELETE /api/family/invitations/:invitationId
 // @desc    Cancella invito
 // @access  Private (Admin only)
-router.delete('/invitations/:invitationId', requireFamilyAdmin, cancelInvitation);
+router.delete('/invitations/:invitationId', authenticate, requireFamilyAdmin, cancelInvitation);
 
 module.exports = router; 

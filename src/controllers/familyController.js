@@ -3,7 +3,7 @@ const User = require('../models/User');
 const logger = require('../utils/logger');
 const { validationResult } = require('express-validator');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const { sendFamilyInvite } = require('../services/emailService');
 
 // @desc    Ottieni informazioni famiglia corrente
 // @route   GET /api/family
@@ -198,42 +198,19 @@ const inviteMember = async (req, res) => {
     // URL di invito (in produzione sarà il frontend)
     const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/join-family/${inviteToken}`;
 
-    // Invia email di invito (se configurata)
-    if (process.env.EMAIL_HOST && process.env.EMAIL_USER) {
-      try {
-        const transporter = nodemailer.createTransporter({
-          host: process.env.EMAIL_HOST,
-          port: process.env.EMAIL_PORT || 587,
-          secure: false,
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-          }
-        });
-
-        const mailOptions = {
-          from: `"FamilyBudget" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
-          to: email,
-          subject: `Invito a unirti alla famiglia "${family.name}"`,
-          html: `
-            <h2>Invito Famiglia FamilyBudget</h2>
-            <p>Ciao!</p>
-            <p><strong>${req.user.name}</strong> ti ha invitato a unirti alla famiglia <strong>"${family.name}"</strong> su FamilyBudget.</p>
-            <p>Clicca sul link seguente per accettare l'invito:</p>
-            <a href="${inviteUrl}" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Accetta Invito</a>
-            <p>L'invito scadrà tra 7 giorni.</p>
-            <p>Se non conosci questa persona, ignora questa email.</p>
-            <br>
-            <p>Team FamilyBudget</p>
-          `
-        };
-
-        await transporter.sendMail(mailOptions);
-        logger.info(`Family invitation email sent to: ${email}`);
-      } catch (emailError) {
-        logger.error('Email sending error:', emailError);
-        // Non bloccare il processo se l'email fallisce
-      }
+    // Invia email di invito
+    try {
+      await sendFamilyInvite({
+        to: email,
+        inviteUrl,
+        familyName: family.name,
+        inviterName: req.user.name
+      });
+      
+      logger.info(`Family invitation email sent to: ${email}`);
+    } catch (emailError) {
+      logger.error('Email sending error:', emailError);
+      // Non bloccare il processo se l'email fallisce
     }
 
     logger.info(`Family invitation sent: ${email} to family ${familyId} by ${req.user.email}`);
