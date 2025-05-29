@@ -19,6 +19,8 @@ const getExpenses = async (req, res) => {
       startDate, 
       endDate,
       search,
+      minAmount,
+      maxAmount,
       sortBy = 'date',
       sortOrder = 'desc'
     } = req.query;
@@ -39,6 +41,12 @@ const getExpenses = async (req, res) => {
       filters.date = {};
       if (startDate) filters.date.$gte = new Date(startDate);
       if (endDate) filters.date.$lte = new Date(endDate);
+    }
+
+    if (minAmount || maxAmount) {
+      filters.amount = {};
+      if (minAmount) filters.amount.$gte = parseFloat(minAmount);
+      if (maxAmount) filters.amount.$lte = parseFloat(maxAmount);
     }
 
     if (search) {
