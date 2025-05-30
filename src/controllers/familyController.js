@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 const { validationResult } = require('express-validator');
 const crypto = require('crypto');
 const { sendFamilyInvite } = require('../services/emailService');
+const cloudinary = require('../config/cloudinary');
 
 // @desc    Ottieni informazioni famiglia corrente
 // @route   GET /api/family
@@ -659,6 +660,191 @@ const cancelInvitation = async (req, res) => {
   }
 };
 
+// @desc    Upload banner famiglia
+// @route   POST /api/family/upload-banner
+// @access  Private (Admin only)
+const uploadFamilyBanner = async (req, res) => {
+  try {
+    const { familyId } = req.user;
+
+    // Solo admin famiglia può modificare banner
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Permessi insufficienti',
+        message: 'Solo gli admin famiglia possono modificare il banner'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'File mancante',
+        message: 'Nessun file banner caricato'
+      });
+    }
+
+    const family = await Family.findById(familyId);
+    if (!family) {
+      return res.status(404).json({
+        error: 'Famiglia non trovata',
+        message: 'La famiglia non esiste'
+      });
+    }
+
+    // Upload su Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          folder: 'family-banners',
+          transformation: [
+            { width: 1200, height: 400, crop: 'fill', quality: 'auto' }
+          ]
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      ).end(req.file.buffer);
+    });
+
+    // Elimina banner precedente se esiste
+    if (family.banner && family.banner.includes('cloudinary.com')) {
+      try {
+        const publicId = family.banner.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(`family-banners/${publicId}`);
+      } catch (deleteError) {
+        logger.warn('Error deleting old banner:', deleteError);
+      }
+    }
+
+    // Aggiorna famiglia con nuovo banner
+    family.banner = uploadResult.secure_url;
+    await family.save();
+
+    logger.info(`Family banner updated: ${familyId} by ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Banner famiglia aggiornato con successo',
+      data: { bannerUrl: uploadResult.secure_url }
+    });
+
+  } catch (error) {
+    logger.error('Upload family banner error:', error);
+    res.status(500).json({
+      error: 'Errore interno del server',
+      message: 'Errore durante l\'upload del banner'
+    });
+  }
+};
+
+// @desc    Imposta banner famiglia tramite URL
+// @route   PUT /api/family/set-banner-url
+// @access  Private (Admin only)
+const setFamilyBannerUrl = async (req, res) => {
+  try {
+    // Validazione input
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Errori di validazione',
+        message: errors.array().map(err => err.msg).join(', ')
+      });
+    }
+
+    const { familyId } = req.user;
+    const { bannerUrl } = req.body;
+
+    // Solo admin famiglia può modificare banner
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Permessi insufficienti',
+        message: 'Solo gli admin famiglia possono modificare il banner'
+      });
+    }
+
+    const family = await Family.findById(familyId);
+    if (!family) {
+      return res.status(404).json({
+        error: 'Famiglia non trovata',
+        message: 'La famiglia non esiste'
+      });
+    }
+
+    // Aggiorna banner
+    family.banner = bannerUrl.trim();
+    await family.save();
+
+    logger.info(`Family banner URL set: ${familyId} by ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Banner famiglia impostato con successo',
+      data: { bannerUrl: family.banner }
+    });
+
+  } catch (error) {
+    logger.error('Set family banner URL error:', error);
+    res.status(500).json({
+      error: 'Errore interno del server',
+      message: 'Errore durante l\'impostazione del banner'
+    });
+  }
+};
+
+// @desc    Rimuovi banner famiglia
+// @route   DELETE /api/family/banner
+// @access  Private (Admin only)
+const removeFamilyBanner = async (req, res) => {
+  try {
+    const { familyId } = req.user;
+
+    // Solo admin famiglia può rimuovere banner
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Permessi insufficienti',
+        message: 'Solo gli admin famiglia possono rimuovere il banner'
+      });
+    }
+
+    const family = await Family.findById(familyId);
+    if (!family) {
+      return res.status(404).json({
+        error: 'Famiglia non trovata',
+        message: 'La famiglia non esiste'
+      });
+    }
+
+    // Elimina da Cloudinary se è un'immagine caricata
+    if (family.banner && family.banner.includes('cloudinary.com')) {
+      try {
+        const publicId = family.banner.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(`family-banners/${publicId}`);
+      } catch (deleteError) {
+        logger.warn('Error deleting banner from Cloudinary:', deleteError);
+      }
+    }
+
+    // Rimuovi banner dalla famiglia
+    family.banner = null;
+    await family.save();
+
+    logger.info(`Family banner removed: ${familyId} by ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Banner famiglia rimosso con successo'
+    });
+
+  } catch (error) {
+    logger.error('Remove family banner error:', error);
+    res.status(500).json({
+      error: 'Errore interno del server',
+      message: 'Errore durante la rimozione del banner'
+    });
+  }
+};
+
 module.exports = {
   getFamily,
   updateFamily,
@@ -668,5 +854,8 @@ module.exports = {
   removeMember,
   leaveFamily,
   getInvitations,
-  cancelInvitation
+  cancelInvitation,
+  uploadFamilyBanner,
+  setFamilyBannerUrl,
+  removeFamilyBanner
 }; 

@@ -108,19 +108,17 @@ router.get('/', authenticate, async (req, res) => {
         }
       ]),
 
-      // Ultime 5 spese nel periodo filtrato
+      // Tutte le spese nel periodo filtrato
       Expense.find(baseExpenseMatch)
         .populate('category', 'name color icon')
         .populate('userId', 'name')
         .sort({ date: -1 })
-        .limit(5)
         .lean(),
 
-      // Ultime 5 entrate nel periodo filtrato
+      // Tutte le entrate nel periodo filtrato
       Income.find(baseIncomeMatch)
         .populate('userId', 'name')
         .sort({ date: -1 })
-        .limit(5)
         .lean()
     ]);
 
@@ -252,13 +250,12 @@ router.get('/', authenticate, async (req, res) => {
     const totalIncomeAmount = totalIncomes[0]?.totalAmount || 0;
     const balance = totalIncomeAmount - totalExpenseAmount;
 
-    // Combina e ordina le transazioni recenti
+    // Combina e ordina tutte le transazioni del periodo
     const recentTransactions = [
       ...recentExpenses.map(expense => ({ ...expense, type: 'expense' })),
       ...recentIncomes.map(income => ({ ...income, type: 'income' }))
     ]
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 5);
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
 
     // Per i budget, calcoliamo lo stato rispetto al periodo filtrato (default: dall'inizio ad oggi)
     let budgetAlerts = [];

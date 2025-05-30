@@ -14,6 +14,11 @@ const familySchema = new mongoose.Schema({
     maxlength: [200, 'La descrizione non può superare i 200 caratteri']
   },
   
+  banner: {
+    type: String,
+    trim: true
+  },
+  
   createdBy: {
     type: mongoose.Schema.ObjectId,
     ref: 'User',

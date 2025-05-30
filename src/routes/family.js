@@ -1,5 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
+const multer = require('multer');
 const {
   getFamily,
   updateFamily,
@@ -9,11 +10,30 @@ const {
   removeMember,
   leaveFamily,
   getInvitations,
-  cancelInvitation
+  cancelInvitation,
+  uploadFamilyBanner,
+  setFamilyBannerUrl,
+  removeFamilyBanner
 } = require('../controllers/familyController');
 const { authenticate, requireFamilyMember, requireFamilyAdmin } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Configurazione multer per upload banner
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo file immagine sono permessi'), false);
+    }
+  }
+});
 
 // Validazioni per aggiornamento famiglia
 const updateFamilyValidation = [
@@ -60,6 +80,13 @@ const updateMemberRoleValidation = [
     .withMessage('Ruolo non valido')
 ];
 
+// Validazioni per banner URL
+const bannerUrlValidation = [
+  body('bannerUrl')
+    .isURL()
+    .withMessage('URL banner non valido')
+];
+
 // @route   GET /api/family
 // @desc    Ottieni informazioni famiglia corrente
 // @access  Private
@@ -104,5 +131,20 @@ router.delete('/members/:userId', authenticate, requireFamilyAdmin, removeMember
 // @desc    Cancella invito
 // @access  Private (Admin only)
 router.delete('/invitations/:invitationId', authenticate, requireFamilyAdmin, cancelInvitation);
+
+// @route   POST /api/family/upload-banner
+// @desc    Upload banner famiglia
+// @access  Private (Admin only)
+router.post('/upload-banner', authenticate, requireFamilyAdmin, upload.single('banner'), uploadFamilyBanner);
+
+// @route   PUT /api/family/set-banner-url
+// @desc    Imposta banner famiglia tramite URL
+// @access  Private (Admin only)
+router.put('/set-banner-url', authenticate, requireFamilyAdmin, bannerUrlValidation, setFamilyBannerUrl);
+
+// @route   DELETE /api/family/banner
+// @desc    Rimuovi banner famiglia
+// @access  Private (Admin only)
+router.delete('/banner', authenticate, requireFamilyAdmin, removeFamilyBanner);
 
 module.exports = router; 
