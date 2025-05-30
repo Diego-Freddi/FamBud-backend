@@ -53,12 +53,8 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // Hash nuova password
-    const saltRounds = 12;
-    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
-
-    // Aggiorna password
-    user.password = hashedNewPassword;
+    // Aggiorna password (il middleware pre-save si occuperà dell'hash)
+    user.password = newPassword;
     await user.save();
 
     logger.info(`Password changed for user: ${user.email}`);
