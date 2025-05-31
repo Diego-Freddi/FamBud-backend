@@ -32,6 +32,25 @@ const getFamily = async (req, res) => {
       });
     }
 
+    // Pulizia automatica: rimuovi membri con utenti eliminati
+    let needsCleanup = false;
+    const originalMembersCount = family.members.length;
+    
+    family.members = family.members.filter(member => {
+      if (!member.user) {
+        needsCleanup = true;
+        logger.warn(`Removing member with deleted user from family ${familyId}`);
+        return false;
+      }
+      return true;
+    });
+
+    // Salva solo se necessario
+    if (needsCleanup) {
+      await family.save();
+      logger.info(`Cleaned up ${originalMembersCount - family.members.length} deleted user references from family ${familyId}`);
+    }
+
     // Calcola statistiche famiglia
     const stats = await family.getStats();
 
@@ -49,7 +68,7 @@ const getFamily = async (req, res) => {
         },
         stats,
         userRole: family.members.find(m => 
-          m.user._id.toString() === req.user._id.toString()
+          m.user && m.user._id.toString() === req.user._id.toString()
         )?.role || 'member'
       }
     });
@@ -343,6 +362,69 @@ const joinFamily = async (req, res) => {
     res.status(500).json({
       error: 'Errore interno del server',
       message: 'Errore durante l\'adesione alla famiglia'
+    });
+  }
+};
+
+// @desc    Verifica dettagli invito famiglia
+// @route   GET /api/family/invite/:token
+// @access  Public
+const verifyInvite = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Hash del token per confronto
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Trova famiglia con invito valido
+    const family = await Family.findOne({
+      'invitations.token': hashedToken,
+      'invitations.expiresAt': { $gt: Date.now() },
+      'invitations.status': 'pending'
+    }).populate('createdBy', 'name email');
+
+    if (!family) {
+      return res.status(400).json({
+        error: 'Invito non valido',
+        message: 'L\'invito non è valido o è scaduto'
+      });
+    }
+
+    // Trova l'invito specifico
+    const invitation = family.invitations.find(inv => 
+      inv.token === hashedToken && inv.status === 'pending'
+    );
+
+    if (!invitation) {
+      return res.status(400).json({
+        error: 'Invito non trovato',
+        message: 'L\'invito non è stato trovato'
+      });
+    }
+
+    // Popola informazioni dell'invitante
+    await family.populate('invitations.invitedBy', 'name email');
+    const inviter = family.invitations.find(inv => inv.token === hashedToken)?.invitedBy;
+
+    res.json({
+      success: true,
+      data: {
+        familyName: family.name,
+        familyDescription: family.description,
+        inviterName: inviter?.name || 'Utente sconosciuto',
+        inviterEmail: inviter?.email,
+        invitedEmail: invitation.email,
+        role: invitation.role,
+        expiresAt: invitation.expiresAt,
+        createdAt: invitation.createdAt
+      }
+    });
+
+  } catch (error) {
+    logger.error('Verify invite error:', error);
+    res.status(500).json({
+      error: 'Errore interno del server',
+      message: 'Errore durante la verifica dell\'invito'
     });
   }
 };
@@ -865,5 +947,6 @@ module.exports = {
   cancelInvitation,
   uploadFamilyBanner,
   setFamilyBannerUrl,
-  removeFamilyBanner
+  removeFamilyBanner,
+  verifyInvite
 }; 

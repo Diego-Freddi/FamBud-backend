@@ -13,7 +13,8 @@ const {
   cancelInvitation,
   uploadFamilyBanner,
   setFamilyBannerUrl,
-  removeFamilyBanner
+  removeFamilyBanner,
+  verifyInvite
 } = require('../controllers/familyController');
 const { authenticate, requireFamilyMember, requireFamilyAdmin } = require('../middleware/auth');
 
@@ -111,6 +112,11 @@ router.post('/invite', authenticate, requireFamilyAdmin, inviteMemberValidation,
 // @desc    Accetta invito famiglia
 // @access  Private
 router.post('/join/:token', authenticate, joinFamily);
+
+// @route   GET /api/family/invite/:token
+// @desc    Verifica dettagli invito famiglia
+// @access  Public
+router.get('/invite/:token', verifyInvite);
 
 // @route   POST /api/family/leave
 // @desc    Lascia famiglia

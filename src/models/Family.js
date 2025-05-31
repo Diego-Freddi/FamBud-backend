@@ -222,12 +222,12 @@ familySchema.methods.isUserAdmin = function(userId) {
 
 // Metodo per ottenere membri attivi
 familySchema.methods.getActiveMembers = function() {
-  return this.members.filter(member => member.isActive);
+  return this.members.filter(member => member.isActive && member.user);
 };
 
 // Metodo per ottenere ex-membri
 familySchema.methods.getFormerMembers = function() {
-  return this.members.filter(member => !member.isActive);
+  return this.members.filter(member => !member.isActive && member.user);
 };
 
 // Metodo per ottenere statistiche famiglia
