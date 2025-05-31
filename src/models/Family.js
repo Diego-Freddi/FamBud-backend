@@ -43,6 +43,20 @@ const familySchema = new mongoose.Schema({
     isActive: {
       type: Boolean,
       default: true
+    },
+    leftAt: {
+      type: Date,
+      default: null
+    },
+    leftReason: {
+      type: String,
+      enum: ['voluntary', 'removed', 'admin_action'],
+      default: null
+    },
+    leftBy: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'User',
+      default: null
     }
   }],
   
@@ -143,11 +157,21 @@ familySchema.methods.addMember = function(userId, role = 'member') {
   return this.save();
 };
 
-// Metodo per rimuovere un membro
-familySchema.methods.removeMember = function(userId) {
-  this.members = this.members.filter(
-    member => member.user.toString() !== userId.toString()
+// Metodo per rimuovere un membro (marca come ex-membro)
+familySchema.methods.removeMember = function(userId, reason = 'voluntary', removedBy = null) {
+  const member = this.members.find(
+    member => member.user.toString() === userId.toString()
   );
+  
+  if (!member) {
+    throw new Error('Membro non trovato');
+  }
+  
+  // Marca come inattivo invece di eliminare
+  member.isActive = false;
+  member.leftAt = new Date();
+  member.leftReason = reason;
+  member.leftBy = removedBy;
   
   return this.save();
 };
@@ -199,6 +223,11 @@ familySchema.methods.isUserAdmin = function(userId) {
 // Metodo per ottenere membri attivi
 familySchema.methods.getActiveMembers = function() {
   return this.members.filter(member => member.isActive);
+};
+
+// Metodo per ottenere ex-membri
+familySchema.methods.getFormerMembers = function() {
+  return this.members.filter(member => !member.isActive);
 };
 
 // Metodo per ottenere statistiche famiglia

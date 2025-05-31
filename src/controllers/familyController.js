@@ -35,10 +35,18 @@ const getFamily = async (req, res) => {
     // Calcola statistiche famiglia
     const stats = await family.getStats();
 
+    // Separa membri attivi ed ex-membri
+    const activeMembers = family.getActiveMembers();
+    const formerMembers = family.getFormerMembers();
+
     res.json({
       success: true,
       data: {
-        family,
+        family: {
+          ...family.toObject(),
+          activeMembers,
+          formerMembers
+        },
         stats,
         userRole: family.members.find(m => 
           m.user._id.toString() === req.user._id.toString()
