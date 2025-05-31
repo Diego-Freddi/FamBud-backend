@@ -3,7 +3,7 @@ const Family = require('../models/Family');
 const { generateToken } = require('../config/jwt');
 const logger = require('../utils/logger');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const { sendEmail } = require('../services/emailService');
 
 // @desc    Registrazione utente
 // @route   POST /api/auth/register
@@ -260,6 +260,7 @@ const createFamily = async (req, res) => {
       success: true,
       message: 'Famiglia creata con successo',
       data: {
+        user: user.getPublicProfile(),
         family: {
           _id: family._id,
           name: family.name,
@@ -335,21 +336,10 @@ const forgotPassword = async (req, res) => {
     // URL di reset (in produzione sarà il frontend)
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
 
-    // Configurazione email (solo se configurata)
-    if (process.env.EMAIL_HOST && process.env.EMAIL_USER) {
+    // Invio email con SendGrid
+    if (process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM) {
       try {
-        const transporter = nodemailer.createTransporter({
-          host: process.env.EMAIL_HOST,
-          port: process.env.EMAIL_PORT || 587,
-          secure: false,
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-          }
-        });
-
-        const mailOptions = {
-          from: `"FamilyBudget" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+        await sendEmail({
           to: user.email,
           subject: 'Reset Password - FamilyBudget',
           html: `
@@ -363,13 +353,19 @@ const forgotPassword = async (req, res) => {
             <br>
             <p>Team FamilyBudget</p>
           `
-        };
-
-        await transporter.sendMail(mailOptions);
+        });
+        
         logger.info(`Password reset email sent to: ${email}`);
       } catch (emailError) {
         logger.error('Email sending error:', emailError);
         // Non bloccare il processo se l'email fallisce
+      }
+    } else {
+      // In sviluppo, logga il link di reset se l'email non è configurata
+      if (process.env.NODE_ENV === 'development') {
+        logger.warn(`Email not configured. Reset link for ${email}: ${resetUrl}`);
+        console.log(`\n🔗 RESET PASSWORD LINK for ${email}:`);
+        console.log(`${resetUrl}\n`);
       }
     }
 

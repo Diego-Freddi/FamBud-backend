@@ -57,6 +57,12 @@ const setAvatarUrlValidation = [
     .withMessage('L\'URL deve essere tra 10 e 500 caratteri')
 ];
 
+const deleteAccountValidation = [
+  body('password')
+    .notEmpty()
+    .withMessage('La password è obbligatoria per confermare l\'eliminazione dell\'account')
+];
+
 // @route   PUT /api/profile/change-password
 // @desc    Cambia password utente
 // @access  Private
@@ -85,6 +91,6 @@ router.get('/export-data', authenticate, exportUserData);
 // @route   DELETE /api/profile/delete-account
 // @desc    Elimina account utente
 // @access  Private
-router.delete('/delete-account', authenticate, deleteAccount);
+router.delete('/delete-account', authenticate, deleteAccountValidation, deleteAccount);
 
 module.exports = router; 

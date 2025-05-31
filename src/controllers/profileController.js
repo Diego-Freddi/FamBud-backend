@@ -326,37 +326,100 @@ const exportUserData = async (req, res) => {
 // @access  Private
 const deleteAccount = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const user = req.user;
-
-    // Se l'utente è l'unico admin della famiglia, non può eliminarsi
-    if (user.familyId && user.role === 'admin') {
-      const family = await Family.findById(user.familyId);
-      const adminCount = family.members.filter(m => m.role === 'admin' && m.isActive).length;
-      
-      if (adminCount === 1) {
-        return res.status(400).json({
-          error: 'Impossibile eliminare account',
-          message: 'Non puoi eliminare il tuo account se sei l\'unico amministratore della famiglia. Nomina prima un altro amministratore o elimina la famiglia.'
-        });
-      }
+    // Controlla errori di validazione
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Errori di validazione',
+        message: errors.array().map(err => err.msg).join(', ')
+      });
     }
 
-    // Elimina avatar se esiste
-    if (user.avatar) {
-      const publicId = extractPublicId(user.avatar);
-      if (publicId) {
-        try {
-          await deleteImage(publicId);
-          logger.info(`Avatar deleted from Cloudinary: ${publicId}`);
-        } catch (err) {
-          logger.warn(`Could not delete avatar from Cloudinary: ${publicId}`, err);
+    const { password } = req.body;
+    const userId = req.user._id;
+
+    // Verifica che la password sia stata fornita
+    if (!password) {
+      return res.status(400).json({
+        error: 'Password richiesta',
+        message: 'Inserisci la tua password per confermare l\'eliminazione dell\'account'
+      });
+    }
+
+    // Trova utente con password per verificarla
+    const user = await User.findById(userId).select('+password');
+    if (!user) {
+      return res.status(404).json({
+        error: 'Utente non trovato',
+        message: 'L\'utente non esiste'
+      });
+    }
+
+    // Verifica password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({
+        error: 'Password non valida',
+        message: 'La password inserita non è corretta'
+      });
+    }
+
+    // Carica dati famiglia se presente
+    let family = null;
+    if (user.familyId) {
+      family = await Family.findById(user.familyId);
+    }
+
+    // CASO 1: Utente è l'unico membro (e quindi amministratore)
+    // --> viene eliminato dal database sia l'utente che la famiglia
+    if (family && family.members.length === 1) {
+      // Elimina avatar se esiste
+      if (user.avatar && user.avatar.includes('cloudinary.com')) {
+        const publicId = extractPublicId(user.avatar);
+        if (publicId) {
+          try {
+            await deleteImage(publicId);
+            logger.info(`Avatar deleted from Cloudinary: ${publicId}`);
+          } catch (err) {
+            logger.warn(`Could not delete avatar from Cloudinary: ${publicId}`, err);
+          }
         }
       }
+
+      // Elimina tutti i dati dell'utente e della famiglia
+      await Promise.all([
+        Expense.deleteMany({ familyId: user.familyId }),
+        Income.deleteMany({ familyId: user.familyId }),
+        Budget.deleteMany({ familyId: user.familyId }),
+        Family.findByIdAndDelete(user.familyId),
+        User.findByIdAndDelete(userId)
+      ]);
+
+      logger.info(`Account and family deleted for sole member: ${user.email}`);
+
+      return res.json({
+        success: true,
+        message: 'Account e famiglia eliminati con successo'
+      });
     }
 
-    // Rimuovi utente dalla famiglia
-    if (user.familyId) {
+    // CASO 2: Utente non è l'unico membro e non è amministratore
+    // --> viene eliminato dalla famiglia e dal database
+    if (family && family.members.length > 1 && user.role !== 'admin') {
+      // Elimina avatar se esiste
+      if (user.avatar && user.avatar.includes('cloudinary.com')) {
+        const publicId = extractPublicId(user.avatar);
+        if (publicId) {
+          try {
+            await deleteImage(publicId);
+            logger.info(`Avatar deleted from Cloudinary: ${publicId}`);
+          } catch (err) {
+            logger.warn(`Could not delete avatar from Cloudinary: ${publicId}`, err);
+          }
+        }
+      }
+
+      // Rimuovi utente dalla famiglia
       await Family.findByIdAndUpdate(
         user.familyId,
         {
@@ -365,20 +428,87 @@ const deleteAccount = async (req, res) => {
           }
         }
       );
+
+      // Elimina tutti i dati dell'utente
+      await Promise.all([
+        Expense.deleteMany({ userId }),
+        Income.deleteMany({ userId }),
+        User.findByIdAndDelete(userId)
+      ]);
+
+      logger.info(`Member account deleted: ${user.email}`);
+
+      return res.json({
+        success: true,
+        message: 'Account eliminato con successo'
+      });
     }
 
-    // Elimina tutti i dati dell'utente
-    await Promise.all([
-      Expense.deleteMany({ userId }),
-      Income.deleteMany({ userId }),
-      User.findByIdAndDelete(userId)
-    ]);
+    // CASO 3: Utente non è l'unico membro ma è l'amministratore
+    // --> i suoi privilegi passano automaticamente al membro successivo e lui viene eliminato
+    if (family && family.members.length > 1 && user.role === 'admin') {
+      // Trova il primo membro che non è l'utente corrente
+      const nextMember = family.members.find(member => 
+        member.user.toString() !== userId.toString()
+      );
 
-    logger.info(`Account deleted for user: ${user.email}`);
+      if (!nextMember) {
+        return res.status(400).json({
+          error: 'Errore nella gestione famiglia',
+          message: 'Impossibile trovare un membro a cui trasferire i privilegi di amministratore'
+        });
+      }
 
-    res.json({
-      success: true,
-      message: 'Account eliminato con successo'
+      // Promuovi il prossimo membro ad admin
+      await Family.findOneAndUpdate(
+        { _id: user.familyId, 'members.user': nextMember.user },
+        { $set: { 'members.$.role': 'admin' } }
+      );
+
+      // Elimina avatar se esiste
+      if (user.avatar && user.avatar.includes('cloudinary.com')) {
+        const publicId = extractPublicId(user.avatar);
+        if (publicId) {
+          try {
+            await deleteImage(publicId);
+            logger.info(`Avatar deleted from Cloudinary: ${publicId}`);
+          } catch (err) {
+            logger.warn(`Could not delete avatar from Cloudinary: ${publicId}`, err);
+          }
+        }
+      }
+
+      // Rimuovi utente dalla famiglia
+      await Family.findByIdAndUpdate(
+        user.familyId,
+        {
+          $pull: { 
+            members: { user: userId }
+          }
+        }
+      );
+
+      // Elimina tutti i dati dell'utente
+      await Promise.all([
+        Expense.deleteMany({ userId }),
+        Income.deleteMany({ userId }),
+        User.findByIdAndDelete(userId)
+      ]);
+
+      // Carica il nuovo admin per il log
+      const newAdmin = await User.findById(nextMember.user);
+      logger.info(`Admin account deleted: ${user.email}, privileges transferred to: ${newAdmin?.email}`);
+
+      return res.json({
+        success: true,
+        message: 'Account eliminato con successo. I privilegi di amministratore sono stati trasferiti automaticamente.'
+      });
+    }
+
+    // Caso fallback (non dovrebbe mai accadere)
+    return res.status(400).json({
+      error: 'Errore nella gestione eliminazione',
+      message: 'Impossibile determinare la strategia di eliminazione per questo account'
     });
 
   } catch (error) {
