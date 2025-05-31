@@ -62,8 +62,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true // Aggiunge automaticamente createdAt e updatedAt
 });
 
-// Index per performance
-userSchema.index({ email: 1 });
+// Index per performance - rimuovo email perché già unique nel campo
 userSchema.index({ familyId: 1 });
 
 // Middleware pre-save per hash della password

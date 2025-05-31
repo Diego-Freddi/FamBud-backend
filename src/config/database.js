@@ -3,12 +3,10 @@ const logger = require('../utils/logger');
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    const conn = await mongoose.connect(process.env.MONGODB_URI);
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
+    logger.info(`Database: ${conn.connection.name}`);
     
     // Event listeners per la connessione
     mongoose.connection.on('error', (err) => {
