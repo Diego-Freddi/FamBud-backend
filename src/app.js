@@ -28,8 +28,36 @@ app.use(helmet({
 }));
 
 // CORS configuration
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://family-finance-frontend.vercel.app', // Fallback specifico
+  'https://family-finance.vercel.app' // Altro possibile nome
+].filter(Boolean); // Rimuove valori undefined/null
+
+console.log('🌐 CORS Origins allowed:', allowedOrigins);
+console.log('🔧 FRONTEND_URL from env:', process.env.FRONTEND_URL);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // Permetti richieste senza origin (es. mobile apps, Postman)
+    if (!origin) return callback(null, true);
+    
+    // Controlla se l'origin è nella lista permessa
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // In sviluppo, permetti tutto
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    console.log('❌ CORS blocked origin:', origin);
+    const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+    return callback(new Error(msg), false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
