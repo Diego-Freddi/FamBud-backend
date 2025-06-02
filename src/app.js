@@ -15,7 +15,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const profileRoutes = require('./routes/profile');
 
 // Importazione middleware personalizzati
-const errorHandler = require('./middleware/errorHandler');
+// const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
@@ -36,8 +36,8 @@ const allowedOrigins = [
   'https://family-finance.vercel.app' // Altro possibile nome
 ].filter(Boolean); // Rimuove valori undefined/null
 
-logger.info('🌐 CORS Origins allowed:', { allowedOrigins });
-logger.info('🔧 FRONTEND_URL from env:', { frontendUrl: process.env.FRONTEND_URL });
+console.log('🌐 CORS Origins allowed:', allowedOrigins);
+console.log('🔧 FRONTEND_URL from env:', process.env.FRONTEND_URL);
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -54,7 +54,7 @@ app.use(cors({
       return callback(null, true);
     }
     
-    logger.warn('❌ CORS blocked origin:', { origin });
+    console.log('❌ CORS blocked origin:', origin);
     const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
     return callback(new Error(msg), false);
   },
@@ -90,7 +90,7 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
-    message: 'Family Finance Backend API is running',
+    message: 'FamBud Backend API is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV
   });
@@ -114,7 +114,16 @@ app.use('*', (req, res) => {
   });
 });
 
-// Error handling middleware
-app.use(errorHandler);
+// Error handling middleware (da decommentare quando sarà creato)
+// app.use(errorHandler);
+
+// Temporary error handler
+app.use((err, req, res, next) => {
+  logger.error(err.stack);
+  res.status(500).json({
+    error: 'Errore interno del server',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Qualcosa è andato storto'
+  });
+});
 
 module.exports = app; 
